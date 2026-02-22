@@ -1,0 +1,67 @@
+            return writer;
+        }
+
+        const cliffEnd = this.vestingCliffs.get(key);
+        const vestingEnd = this.vestingEnds.get(key);
+        const released = this.vestingReleased.get(key);
+        const currentBlock: u256 = Blockchain.block.number;
+
+        const claimable = this.calculateClaimable(
+            totalAmount,
+            cliffEnd,
+            vestingEnd,
+            released,
+            currentBlock
+        );
+
+        const writer: BytesWriter = new BytesWriter(32);
+        writer.writeU256(claimable);
+        return writer;
+    }
+
+    /**
+     * Get total number of vestings created
+     */
+    private getVestingCount(): BytesWriter {
+        const writer: BytesWriter = new BytesWriter(32);
+        writer.writeU256(this.vestingCount.value);
+        return writer;
+    }
+
+    /**
+     * Calculate how many tokens can be claimed
+     */
+    private calculateClaimable(
+        totalAmount: u256,
+        cliffEnd: u256,
+        vestingEnd: u256,
+        released: u256,
+        currentBlock: u256
+    ): u256 {
+        // Before cliff: nothing available
+        if (currentBlock < cliffEnd) {
+            return u256.Zero;
+        }
+
+        // After vesting end: all remaining tokens
+        if (currentBlock >= vestingEnd) {
+            return SafeMath.sub(totalAmount, released);
+        }
+
+        // During vesting: linear release
+        const vestingDuration: u256 = SafeMath.sub(vestingEnd, cliffEnd);
+        const elapsedBlocks: u256 = SafeMath.sub(currentBlock, cliffEnd);
+
+        // vestedAmount = totalAmount * elapsedBlocks / vestingDuration
+        const vestedAmount: u256 = SafeMath.div(
+            SafeMath.mul(totalAmount, elapsedBlocks),
+            vestingDuration
+        );
+
+        // Return vested minus already released
+        if (vestedAmount <= released) {
+            return u256.Zero;
+        }
+        return SafeMath.sub(vestedAmount, released);
+    }
+}

@@ -1,0 +1,144 @@
+import { u256 } from '@btc-vision/as-bignum/assembly';
+import {
+    Address,
+    Blockchain,
+    BytesWriter,
+    Calldata,
+    OP_NET,
+    Revert,
+    SafeMath,
+    Selector,
+    StoredU256,
+    StoredMapU256,
+    encodeSelector,
+    EMPTY_POINTER,
+} from '@btc-vision/btc-runtime/runtime';
+
+// Custom abort for OP_NET
+
+@final
+export class VestingContract extends OP_NET {
+    private readonly developerAddress: Address = Address.fromString(
+        'bcrt1pmx7c870kpy7yznxe8pdxszhkjlldhelaxt6ummxwtmusagrt9sfq057286'
+    );
+
+    private vestingTokens: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingTotals: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingCliffs: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingEnds: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingReleased: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingStarts: StoredMapU256 = new StoredMapU256(Blockchain.nextPointer);
+    private vestingCount: StoredU256 = new StoredU256(Blockchain.nextPointer, EMPTY_POINTER);
+
+    public constructor() {
+        super();
+    }
+
+    private addressToKey(addr: Address): u256 {
+        const bytes = addr.toBytes();
+        return u256.fromBytes(bytes, true);
+    }
+
+    public override onDeployment(_calldata: Calldata): void {
+        this.vestingCount.value = u256.Zero;
+    }
+
+    public override execute(method: Selector, calldata: Calldata): BytesWriter {
+        const selector = method;
+
+        if (selector == encodeSelector('createVesting')) {
+            return this.createVesting(calldata);
+        }
+
+        if (selector == encodeSelector('release')) {
+            return this.release(calldata);
+        }
+
+        if (selector == encodeSelector('getVestingInfo')) {
+            return this.getVestingInfo(calldata);
+        }
+
+        return new BytesWriter();
+    }
+
+    private createVesting(calldata: Calldata): BytesWriter {
+        const tokenAddr = calldata.readAddress();
+        const beneficiary = calldata.readAddress();
+        const totalAmount = calldata.readU256();
+        const cliffBlocks = calldata.readU256();
+        const vestingBlocks = calldata.readU256();
+
+        const currentBlock = Blockchain.block.number;
+
+        const feeAmount = SafeMath.div(totalAmount, u256.fromU32(100));
+        const netAmount = SafeMath.sub(totalAmount, feeAmount);
+
+        const beneficiaryKey = this.addressToKey(beneficiary);
+        this.vestingTokens.set(beneficiaryKey, this.addressToKey(tokenAddr));
+        this.vestingTotals.set(beneficiaryKey, netAmount);
+        this.vestingStarts.set(beneficiaryKey, currentBlock);
+        this.vestingCliffs.set(beneficiaryKey, SafeMath.add(currentBlock, cliffBlocks));
+        this.vestingEnds.set(beneficiaryKey, SafeMath.add(currentBlock, vestingBlocks));
+        this.vestingReleased.set(beneficiaryKey, u256.Zero);
+
+        this.vestingCount.value = SafeMath.add(this.vestingCount.value, u256.One);
+
+        const response = new BytesWriter();
+        response.writeU256(this.vestingCount.value);
+        return response;
+    }
+
+    private release(calldata: Calldata): BytesWriter {
+        const beneficiary = calldata.readAddress();
+        const beneficiaryKey = this.addressToKey(beneficiary);
+
+        const releasable = this.calculateReleasable(beneficiaryKey);
+        
+        if (releasable.isZero()) {
+            Revert.set('No tokens available');
+        }
+
+        const released = this.vestingReleased.get(beneficiaryKey);
+        this.vestingReleased.set(beneficiaryKey, SafeMath.add(released, releasable));
+
+        const response = new BytesWriter();
+        response.writeU256(releasable);
+        return response;
+    }
+
+    private calculateReleasable(beneficiaryKey: u256): u256 {
+        const currentBlock = Blockchain.block.number;
+        const cliff = this.vestingCliffs.get(beneficiaryKey);
+        
+        if (currentBlock < cliff) {
+            return u256.Zero;
+        }
+
+        const total = this.vestingTotals.get(beneficiaryKey);
+        const start = this.vestingStarts.get(beneficiaryKey);
+        const end = this.vestingEnds.get(beneficiaryKey);
+        const released = this.vestingReleased.get(beneficiaryKey);
+
+        if (currentBlock >= end) {
+            return SafeMath.sub(total, released);
+        }
+
+        const elapsed = SafeMath.sub(currentBlock, start);
+        const duration = SafeMath.sub(end, start);
+        const vested = SafeMath.div(SafeMath.mul(total, elapsed), duration);
+
+        return SafeMath.sub(vested, released);
+    }
+
+    private getVestingInfo(calldata: Calldata): BytesWriter {
+        const beneficiary = calldata.readAddress();
+        const beneficiaryKey = this.addressToKey(beneficiary);
+
+        const response = new BytesWriter();
+        response.writeU256(this.vestingTotals.get(beneficiaryKey));
+        response.writeU256(this.vestingReleased.get(beneficiaryKey));
+        response.writeU256(this.vestingCliffs.get(beneficiaryKey));
+        response.writeU256(this.vestingEnds.get(beneficiaryKey));
+        return response;
+    }
+}
