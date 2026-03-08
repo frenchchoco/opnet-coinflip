@@ -17,9 +17,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@assemblyscript/loader": "^0.28.9",
     "@btc-vision/as-bignum": "^0.1.2",
-    "@btc-vision/assemblyscript": "^0.29.2",
+    "@btc-vision/as-loader": "^0.0.0",
+    "@btc-vision/assemblyscript": "^0.29.3",
     "@btc-vision/btc-runtime": "^1.11.0-rc.7",
     "@btc-vision/opnet-transform": "^1.2.0"
   },
