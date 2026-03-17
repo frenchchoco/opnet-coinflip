@@ -333,8 +333,11 @@ const stringToAddress = async (addressStr: string): Promise<Address> => {
     const hex = taprootToTweakedHex(addressStr).replace(/^0x/, '');
     return Address.wrap(hexToBytes(hex));
   }
-  if (addressStr.startsWith('opr1') || addressStr.startsWith('op1'))
-    return await getProvider().getPublicKeyInfo(addressStr, true);
+  if (addressStr.startsWith('opr1') || addressStr.startsWith('op1')) {
+    const addr = await getProvider().getPublicKeyInfo(addressStr, true);
+    if (!addr) throw new Error(`Could not resolve address: ${addressStr}`);
+    return addr;
+  }
   if (addressStr.startsWith('0x'))
     return Address.wrap(hexToBytes(addressStr.slice(2)));
   const bytes = hexToBytes(addressStr);

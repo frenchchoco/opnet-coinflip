@@ -10,14 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@btc-vision/bitcoin": "^7.0.0-rc.4",
-    "@btc-vision/transaction": "^1.8.0-rc.3",
-    "@btc-vision/walletconnect": "^1.10.0-beta.0",
-    "opnet": "^1.8.1-rc.2",
+    "@btc-vision/bitcoin": "^7.0.0",
+    "@btc-vision/transaction": "^1.8.2",
+    "@btc-vision/walletconnect": "^1.10.5",
+    "opnet": "^1.8.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
-    "vite-plugin-node-polyfills": "^0.23.0"
+    "vite-plugin-node-polyfills": "^0.25.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
